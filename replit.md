@@ -18,8 +18,8 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Backend Port**: 3001
 - **Frontend proxies** `/crm-api` to backend at `localhost:3001`
 - **Completely independent** from the main project — no shared dependencies with `api-server`, `api-spec`, `api-zod`, or `db` packages
-- **AI Assistant**: Supports multiple providers (Gemini, OpenAI, Anthropic, custom). Features knowledge base (document upload), exception table (topics AI must refuse), system prompt editor, and test chat.
-- **AI Exceptions**: `crm_ai_exceptions` table — CRUD at `/crm-api/ai/exceptions`. Active exceptions are injected into all AI prompts as restricted topics.
+- **AI Assistant**: Supports multiple providers (Gemini, OpenAI, Anthropic, custom). Features knowledge base (document upload), exceptions & compliance, system prompt editor, and test chat.
+- **AI Exceptions**: `crm_ai_exceptions` table — CRUD at `/crm-api/ai/exceptions`. Two types: `exception` (blocked topics the AI refuses to discuss) and `compliance` (full documents the AI must follow when responding). Both are injected into all AI prompts. Upload via file or add manually.
 
 ## Stack
 

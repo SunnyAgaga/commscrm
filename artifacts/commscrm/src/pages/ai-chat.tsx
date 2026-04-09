@@ -35,8 +35,10 @@ interface KnowledgeDoc {
 
 interface AiException {
   id: number;
+  type: "exception" | "compliance";
   phrase: string;
   reason: string | null;
+  content: string | null;
   isActive: boolean;
   createdAt: string;
 }
@@ -158,7 +160,10 @@ export default function AiChat() {
   const [editingException, setEditingException] = useState<AiException | null>(null);
   const [showExceptionForm, setShowExceptionForm] = useState(false);
   const [isUploadingExceptions, setIsUploadingExceptions] = useState(false);
+  const [exceptionViewType, setExceptionViewType] = useState<"exception" | "compliance">("exception");
+  const [previewCompliance, setPreviewCompliance] = useState<{ name: string; content: string } | null>(null);
   const exceptionFileRef = useRef<HTMLInputElement>(null);
+  const complianceFileRef = useRef<HTMLInputElement>(null);
 
   // Provider settings form state
   const [editProvider, setEditProvider] = useState("gemini");
@@ -252,7 +257,7 @@ export default function AiChat() {
     onError: () => toast({ title: "Failed to delete exception", variant: "destructive" }),
   });
 
-  const uploadExceptionFile = useCallback(async (file: File) => {
+  const uploadExceptionFile = useCallback(async (file: File, uploadType: "exception" | "compliance" = "exception") => {
     const allowed = ["application/pdf", "text/plain", "text/markdown", "text/csv"];
     const allowedExt = [".pdf", ".txt", ".md", ".csv"];
     const ext = "." + file.name.split(".").pop()?.toLowerCase();
@@ -270,16 +275,22 @@ export default function AiChat() {
       const baseUrl = getBaseUrl();
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("type", uploadType);
       const res = await fetch(`${baseUrl}/ai/exceptions/upload`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || "Upload failed"); }
       const data = await res.json();
       qc.invalidateQueries({ queryKey: ["ai-exceptions"] });
-      toast({ title: "Exceptions imported!", description: `${data.imported} added, ${data.skipped} skipped (duplicates).` });
+      if (uploadType === "compliance") {
+        toast({ title: "Compliance document uploaded!", description: `"${file.name}" is now active.` });
+      } else {
+        toast({ title: "Exceptions imported!", description: `${data.imported} added, ${data.skipped} skipped (duplicates).` });
+      }
     } catch (err: unknown) {
       toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Please try again.", variant: "destructive" });
     } finally {
       setIsUploadingExceptions(false);
       if (exceptionFileRef.current) exceptionFileRef.current.value = "";
+      if (complianceFileRef.current) complianceFileRef.current.value = "";
     }
   }, [qc, toast]);
 
@@ -888,183 +899,305 @@ export default function AiChat() {
 
         {/* Exceptions Tab */}
         <TabsContent value="exceptions">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base">Exception List</CardTitle>
-                    <CardDescription>Topics and phrases the AI will refuse to discuss or respond to.</CardDescription>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={isUploadingExceptions}
-                      onClick={() => exceptionFileRef.current?.click()}
-                    >
-                      {isUploadingExceptions ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Upload className="h-4 w-4 mr-1" />}
-                      Upload File
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setEditingException(null);
-                        setExceptionPhrase("");
-                        setExceptionReason("");
-                        setShowExceptionForm(true);
-                      }}
-                    >
-                      <Plus className="h-4 w-4 mr-1" /> Add Exception
-                    </Button>
-                  </div>
-                  <input
-                    ref={exceptionFileRef}
-                    type="file"
-                    accept=".pdf,.txt,.md,.csv"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) uploadExceptionFile(file);
-                    }}
-                  />
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {showExceptionForm && (
-                  <div className="p-4 rounded-lg border bg-muted/30 space-y-3">
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => { setExceptionViewType("exception"); setShowExceptionForm(false); setEditingException(null); }}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${exceptionViewType === "exception" ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted hover:bg-muted/80 text-muted-foreground"}`}
+            >
+              <ShieldBan className="h-4 w-4 inline mr-1.5 -mt-0.5" />
+              Blocked Topics
+              {exceptions.filter(e => e.type === "exception").length > 0 && (
+                <span className="ml-1.5 text-xs bg-background/20 px-1.5 py-0.5 rounded-full">{exceptions.filter(e => e.type === "exception").length}</span>
+              )}
+            </button>
+            <button
+              onClick={() => { setExceptionViewType("compliance"); setShowExceptionForm(false); setEditingException(null); }}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${exceptionViewType === "compliance" ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted hover:bg-muted/80 text-muted-foreground"}`}
+            >
+              <FileText className="h-4 w-4 inline mr-1.5 -mt-0.5" />
+              Compliance Documents
+              {exceptions.filter(e => e.type === "compliance").length > 0 && (
+                <span className="ml-1.5 text-xs bg-background/20 px-1.5 py-0.5 rounded-full">{exceptions.filter(e => e.type === "compliance").length}</span>
+              )}
+            </button>
+          </div>
+
+          {exceptionViewType === "exception" && (
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
                     <div>
-                      <Label className="text-sm">Topic / Phrase</Label>
-                      <Input
-                        className="mt-1.5"
-                        placeholder='e.g. "competitor pricing", "internal salary info"'
-                        value={exceptionPhrase}
-                        onChange={(e) => setExceptionPhrase(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-sm">Reason (optional)</Label>
-                      <Input
-                        className="mt-1.5"
-                        placeholder="Why this topic is restricted..."
-                        value={exceptionReason}
-                        onChange={(e) => setExceptionReason(e.target.value)}
-                      />
+                      <CardTitle className="text-base">Blocked Topics</CardTitle>
+                      <CardDescription>Topics and phrases the AI will refuse to discuss or respond to.</CardDescription>
                     </div>
                     <div className="flex gap-2">
                       <Button
                         size="sm"
-                        disabled={!exceptionPhrase.trim() || createExceptionMutation.isPending || updateExceptionMutation.isPending}
-                        onClick={() => {
-                          if (editingException) {
-                            updateExceptionMutation.mutate({ id: editingException.id, phrase: exceptionPhrase, reason: exceptionReason || undefined });
-                          } else {
-                            createExceptionMutation.mutate({ phrase: exceptionPhrase, reason: exceptionReason || undefined });
-                          }
-                        }}
+                        variant="outline"
+                        disabled={isUploadingExceptions}
+                        onClick={() => exceptionFileRef.current?.click()}
                       >
-                        {(createExceptionMutation.isPending || updateExceptionMutation.isPending) && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-                        {editingException ? "Update" : "Add"}
+                        {isUploadingExceptions ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Upload className="h-4 w-4 mr-1" />}
+                        Upload File
                       </Button>
                       <Button
                         size="sm"
-                        variant="outline"
                         onClick={() => {
-                          setShowExceptionForm(false);
                           setEditingException(null);
                           setExceptionPhrase("");
                           setExceptionReason("");
+                          setShowExceptionForm(true);
                         }}
                       >
-                        Cancel
+                        <Plus className="h-4 w-4 mr-1" /> Add Topic
                       </Button>
                     </div>
+                    <input
+                      ref={exceptionFileRef}
+                      type="file"
+                      accept=".pdf,.txt,.md,.csv"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) uploadExceptionFile(file, "exception");
+                      }}
+                    />
                   </div>
-                )}
-
-                {exceptionsLoading ? (
-                  <div className="flex items-center justify-center py-8 text-muted-foreground">
-                    <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading...
-                  </div>
-                ) : exceptions.length === 0 ? (
-                  <div className="text-center py-10 text-muted-foreground">
-                    <ShieldBan className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm font-medium">No exceptions yet</p>
-                    <p className="text-xs mt-1">Add topics or phrases the AI should never respond to.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {exceptions.map((ex) => (
-                      <div key={ex.id} className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${ex.isActive ? "bg-background" : "bg-muted/30 opacity-60"}`}>
-                        <Switch
-                          checked={ex.isActive}
-                          onCheckedChange={(checked) => updateExceptionMutation.mutate({ id: ex.id, isActive: checked })}
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {showExceptionForm && (
+                    <div className="p-4 rounded-lg border bg-muted/30 space-y-3">
+                      <div>
+                        <Label className="text-sm">Topic / Phrase</Label>
+                        <Input
+                          className="mt-1.5"
+                          placeholder='e.g. "competitor pricing", "internal salary info"'
+                          value={exceptionPhrase}
+                          onChange={(e) => setExceptionPhrase(e.target.value)}
                         />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{ex.phrase}</p>
-                          {ex.reason && <p className="text-xs text-muted-foreground truncate">{ex.reason}</p>}
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => {
-                              setEditingException(ex);
-                              setExceptionPhrase(ex.phrase);
-                              setExceptionReason(ex.reason || "");
-                              setShowExceptionForm(true);
-                            }}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
-                            onClick={() => deleteExceptionMutation.mutate(ex.id)}
-                          >
-                            <Trash className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            <div className="space-y-4">
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">How exceptions work</CardTitle></CardHeader>
-                <CardContent className="text-xs text-muted-foreground space-y-2">
-                  <p>• Add topics or phrases the AI should refuse to discuss</p>
-                  <p>• Active exceptions are injected into every AI prompt</p>
-                  <p>• The AI will politely decline and offer to help with something else</p>
-                  <p>• Toggle exceptions on/off without deleting them</p>
-                  <p>• Useful for blocking competitor info, sensitive data, or off-topic requests</p>
+                      <div>
+                        <Label className="text-sm">Reason (optional)</Label>
+                        <Input
+                          className="mt-1.5"
+                          placeholder="Why this topic is restricted..."
+                          value={exceptionReason}
+                          onChange={(e) => setExceptionReason(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          disabled={!exceptionPhrase.trim() || createExceptionMutation.isPending || updateExceptionMutation.isPending}
+                          onClick={() => {
+                            if (editingException) {
+                              updateExceptionMutation.mutate({ id: editingException.id, phrase: exceptionPhrase, reason: exceptionReason || undefined });
+                            } else {
+                              createExceptionMutation.mutate({ phrase: exceptionPhrase, reason: exceptionReason || undefined });
+                            }
+                          }}
+                        >
+                          {(createExceptionMutation.isPending || updateExceptionMutation.isPending) && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                          {editingException ? "Update" : "Add"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setShowExceptionForm(false);
+                            setEditingException(null);
+                            setExceptionPhrase("");
+                            setExceptionReason("");
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {exceptionsLoading ? (
+                    <div className="flex items-center justify-center py-8 text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading...
+                    </div>
+                  ) : exceptions.filter(e => e.type === "exception").length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <ShieldBan className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                      <p className="text-sm font-medium">No blocked topics yet</p>
+                      <p className="text-xs mt-1">Add topics or phrases the AI should never respond to.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {exceptions.filter(e => e.type === "exception").map((ex) => (
+                        <div key={ex.id} className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${ex.isActive ? "bg-background" : "bg-muted/30 opacity-60"}`}>
+                          <Switch
+                            checked={ex.isActive}
+                            onCheckedChange={(checked) => updateExceptionMutation.mutate({ id: ex.id, isActive: checked })}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{ex.phrase}</p>
+                            {ex.reason && <p className="text-xs text-muted-foreground truncate">{ex.reason}</p>}
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => {
+                                setEditingException(ex);
+                                setExceptionPhrase(ex.phrase);
+                                setExceptionReason(ex.reason || "");
+                                setShowExceptionForm(true);
+                              }}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
+                              onClick={() => deleteExceptionMutation.mutate(ex.id)}
+                            >
+                              <Trash className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">Upload file format</CardTitle></CardHeader>
-                <CardContent className="text-xs text-muted-foreground space-y-2">
-                  <p>Upload a PDF, TXT, MD, or CSV file with one exception per line.</p>
-                  <p>Optionally add a reason with a separator:</p>
-                  <p className="font-mono bg-muted rounded px-1.5 py-0.5">competitor pricing — Confidential</p>
-                  <p className="font-mono bg-muted rounded px-1.5 py-0.5">internal salary | HR policy</p>
-                  <p>Lines starting with #, //, or --- are ignored. Duplicates are skipped automatically.</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">Example exceptions</CardTitle></CardHeader>
-                <CardContent className="text-xs text-muted-foreground space-y-2">
-                  <p>• "competitor pricing" — Confidential</p>
-                  <p>• "internal salary" — HR policy</p>
-                  <p>• "political opinions" — Off-topic</p>
-                  <p>• "legal advice" — Liability risk</p>
-                </CardContent>
-              </Card>
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">How blocked topics work</CardTitle></CardHeader>
+                  <CardContent className="text-xs text-muted-foreground space-y-2">
+                    <p>• Add topics or phrases the AI should refuse to discuss</p>
+                    <p>• Active items are injected into every AI prompt</p>
+                    <p>• The AI will politely decline and offer to help with something else</p>
+                    <p>• Toggle items on/off without deleting them</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Upload file format</CardTitle></CardHeader>
+                  <CardContent className="text-xs text-muted-foreground space-y-2">
+                    <p>Upload a file with one topic per line.</p>
+                    <p>Optionally add a reason with a separator:</p>
+                    <p className="font-mono bg-muted rounded px-1.5 py-0.5">competitor pricing — Confidential</p>
+                    <p>Duplicates are skipped automatically.</p>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
-          </div>
+          )}
+
+          {exceptionViewType === "compliance" && (
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base">Compliance Documents</CardTitle>
+                      <CardDescription>Upload regulatory, policy, or compliance documents the AI must follow when responding.</CardDescription>
+                    </div>
+                    <Button
+                      size="sm"
+                      disabled={isUploadingExceptions}
+                      onClick={() => complianceFileRef.current?.click()}
+                    >
+                      {isUploadingExceptions ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Upload className="h-4 w-4 mr-1" />}
+                      Upload Document
+                    </Button>
+                    <input
+                      ref={complianceFileRef}
+                      type="file"
+                      accept=".pdf,.txt,.md,.csv"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) uploadExceptionFile(file, "compliance");
+                      }}
+                    />
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {exceptionsLoading ? (
+                    <div className="flex items-center justify-center py-8 text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading...
+                    </div>
+                  ) : exceptions.filter(e => e.type === "compliance").length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                      <p className="text-sm font-medium">No compliance documents yet</p>
+                      <p className="text-xs mt-1">Upload documents the AI must follow (GDPR, industry regulations, company policies, etc.).</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {exceptions.filter(e => e.type === "compliance").map((doc) => (
+                        <div key={doc.id} className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${doc.isActive ? "bg-background" : "bg-muted/30 opacity-60"}`}>
+                          <Switch
+                            checked={doc.isActive}
+                            onCheckedChange={(checked) => updateExceptionMutation.mutate({ id: doc.id, isActive: checked })}
+                          />
+                          <div className="h-9 w-9 rounded-lg bg-amber-100 dark:bg-amber-950/30 flex items-center justify-center shrink-0">
+                            <FileText className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{doc.phrase}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {doc.content ? `${(doc.content.length / 1024).toFixed(1)} KB` : "No content"} · Added {format(new Date(doc.createdAt), "MMM d, yyyy")}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {doc.content && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => setPreviewCompliance({ name: doc.phrase, content: doc.content?.slice(0, 3000) + (doc.content && doc.content.length > 3000 ? "\n\n..." : "") || "" })}
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
+                              onClick={() => deleteExceptionMutation.mutate(doc.id)}
+                            >
+                              <Trash className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">How compliance documents work</CardTitle></CardHeader>
+                  <CardContent className="text-xs text-muted-foreground space-y-2">
+                    <p>• Upload full compliance, regulatory, or policy documents</p>
+                    <p>• The AI will strictly follow these rules when responding</p>
+                    <p>• If a response could violate compliance, the AI will adjust or explain why it cannot provide that information</p>
+                    <p>• Toggle documents on/off without deleting them</p>
+                    <p>• Supports PDF, TXT, MD, and CSV files up to 10 MB</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Example documents</CardTitle></CardHeader>
+                  <CardContent className="text-xs text-muted-foreground space-y-2">
+                    <p>• GDPR data handling policy</p>
+                    <p>• Industry-specific regulations</p>
+                    <p>• Company communication guidelines</p>
+                    <p>• Refund and return policies</p>
+                    <p>• Data retention requirements</p>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         {/* System Prompt Tab */}
@@ -1116,6 +1249,21 @@ export default function AiChat() {
           </ScrollArea>
           <div className="flex justify-end">
             <Button variant="outline" onClick={() => setPreviewDoc(null)}><X className="h-4 w-4 mr-2" /> Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!previewCompliance} onOpenChange={(o) => !o && setPreviewCompliance(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><FileText className="h-4 w-4 text-amber-600" />{previewCompliance?.name}</DialogTitle>
+            <DialogDescription>Compliance document content (first 3000 characters)</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-96 w-full rounded-md border bg-muted/30 p-4">
+            <pre className="text-xs whitespace-pre-wrap font-mono text-foreground">{previewCompliance?.content}</pre>
+          </ScrollArea>
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => setPreviewCompliance(null)}><X className="h-4 w-4 mr-2" /> Close</Button>
           </div>
         </DialogContent>
       </Dialog>

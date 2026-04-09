@@ -39,10 +39,25 @@ async function buildKnowledgeContext(): Promise<string> {
 }
 
 async function buildExceptionContext(): Promise<string> {
-  const exceptions = await AiException.findAll({ where: { isActive: true }, order: [["createdAt", "ASC"]] });
-  if (exceptions.length === 0) return "";
-  const list = exceptions.map((e, i) => `${i + 1}. "${e.phrase}"${e.reason ? ` — ${e.reason}` : ""}`).join("\n");
-  return `\n\n## RESTRICTED TOPICS — DO NOT RESPOND\nYou MUST NOT answer, discuss, or engage with questions about the following topics. If a user asks about any of these, politely decline and say you are not able to help with that topic, then offer to help with something else.\n\n${list}\n\n---\n`;
+  const all = await AiException.findAll({ where: { isActive: true }, order: [["createdAt", "ASC"]] });
+  if (all.length === 0) return "";
+
+  const exceptions = all.filter((e) => e.type === "exception");
+  const complianceDocs = all.filter((e) => e.type === "compliance");
+
+  let result = "";
+
+  if (exceptions.length > 0) {
+    const list = exceptions.map((e, i) => `${i + 1}. "${e.phrase}"${e.reason ? ` — ${e.reason}` : ""}`).join("\n");
+    result += `\n\n## RESTRICTED TOPICS — DO NOT RESPOND\nYou MUST NOT answer, discuss, or engage with questions about the following topics. If a user asks about any of these, politely decline and say you are not able to help with that topic, then offer to help with something else.\n\n${list}\n\n---\n`;
+  }
+
+  if (complianceDocs.length > 0) {
+    const sections = complianceDocs.map((d) => `### ${d.phrase}\n${d.content || ""}`).join("\n\n---\n\n");
+    result += `\n\n## COMPLIANCE REQUIREMENTS — MUST FOLLOW\nYou MUST strictly follow the compliance rules and regulations below when answering questions, providing suggestions, or displaying information. If a question or response could violate any of these compliance rules, adjust your response to comply or explain why you cannot provide that information due to compliance requirements.\n\n${sections}\n\n---\n`;
+  }
+
+  return result;
 }
 
 router.post("/ai/suggest-reply", requireAuth, async (req: AuthRequest, res) => {
@@ -289,9 +304,14 @@ router.get("/ai/exceptions", requireAuth, async (_req: AuthRequest, res) => {
 
 router.post("/ai/exceptions", requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { phrase, reason } = req.body;
+    const { phrase, reason, type, content } = req.body;
     if (!phrase?.trim()) { res.status(400).json({ error: "phrase is required" }); return; }
-    const exception = await AiException.create({ phrase: phrase.trim(), reason: reason?.trim() || null });
+    const exception = await AiException.create({
+      phrase: phrase.trim(),
+      reason: reason?.trim() || null,
+      type: type === "compliance" ? "compliance" : "exception",
+      content: content?.trim() || null,
+    });
     res.status(201).json(exception);
   } catch (err) {
     console.error(err);
@@ -307,6 +327,15 @@ router.post("/ai/exceptions/upload", requireAuth, upload.single("file"), async (
     const text = await extractText(file.buffer, file.mimetype);
     if (!text.trim()) { res.status(400).json({ error: "Could not extract text from this file" }); return; }
 
+    const uploadType = req.body?.type;
+
+    if (uploadType === "compliance") {
+      const title = file.originalname.replace(/\.[^.]+$/, "");
+      const doc = await AiException.create({ type: "compliance", phrase: title, content: text.trim(), reason: null });
+      res.status(201).json({ imported: 1, skipped: 0, exceptions: [doc] });
+      return;
+    }
+
     const lines = text
       .split("\n")
       .map((l) => l.trim())
@@ -320,9 +349,9 @@ router.post("/ai/exceptions/upload", requireAuth, upload.single("file"), async (
       const separatorMatch = line.match(/^(.+?)\s*[—–\-|:]\s*(.+)$/);
       const phrase = separatorMatch ? separatorMatch[1].trim() : line;
       const reason = separatorMatch ? separatorMatch[2].trim() : null;
-      const existing = await AiException.findOne({ where: { phrase } });
+      const existing = await AiException.findOne({ where: { phrase, type: "exception" } });
       if (!existing) {
-        const exception = await AiException.create({ phrase, reason });
+        const exception = await AiException.create({ phrase, reason, type: "exception" });
         created.push(exception);
       }
     }
@@ -338,9 +367,10 @@ router.put("/ai/exceptions/:id", requireAuth, async (req: AuthRequest, res) => {
   try {
     const exception = await AiException.findByPk(req.params.id);
     if (!exception) { res.status(404).json({ error: "Exception not found" }); return; }
-    const { phrase, reason, isActive } = req.body;
+    const { phrase, reason, isActive, content } = req.body;
     if (phrase !== undefined) exception.phrase = phrase.trim();
     if (reason !== undefined) exception.reason = reason?.trim() || null;
+    if (content !== undefined) exception.content = content?.trim() || null;
     if (isActive !== undefined) exception.isActive = isActive;
     await exception.save();
     res.json(exception);

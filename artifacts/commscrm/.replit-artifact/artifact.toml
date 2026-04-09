@@ -29,3 +29,29 @@ to = "/index.html"
 [services.env]
 PORT = "24810"
 BASE_PATH = "/"
+
+[[services]]
+name = "crm-api"
+paths = [ "/crm-api" ]
+localPort = 3001
+
+[services.development]
+run = "PORT=3001 pnpm --filter @workspace/commscrm-api run dev"
+
+[services.production]
+
+[services.production.build]
+args = [ "pnpm", "--filter", "@workspace/commscrm-api", "run", "build" ]
+
+[services.production.build.env]
+NODE_ENV = "production"
+
+[services.production.run]
+args = [ "node", "--enable-source-maps", "artifacts/commscrm-api/dist/index.mjs" ]
+
+[services.production.run.env]
+PORT = "3001"
+NODE_ENV = "production"
+
+[services.env]
+PORT = "3001"

@@ -46,9 +46,9 @@ const authLimiter = rateLimit({
   message: { error: "Too many requests, please try again later." },
 });
 
-app.use("/api/auth/login", authLimiter);
+app.use("/crm-api/auth/login", authLimiter);
 
-app.use("/api", router);
+app.use("/crm-api", router);
 
 if (process.env.NODE_ENV === "development") {
   const { createProxyMiddleware } = await import("http-proxy-middleware");

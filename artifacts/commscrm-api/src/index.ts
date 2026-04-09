@@ -7,7 +7,7 @@ import { seedDatabase } from "./seeds.js";
 
 import "./models/index.js";
 
-const PORT = parseInt(process.env.PORT ?? "8081", 10);
+const PORT = parseInt(process.env.PORT ?? "3001", 10);
 
 async function start() {
   await connectDatabase();

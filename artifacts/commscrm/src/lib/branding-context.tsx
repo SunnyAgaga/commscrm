@@ -7,6 +7,7 @@ interface BrandingData {
   sidebarColor: string;
   logoData: string | null;
   backgroundData: string | null;
+  defaultCurrency: string;
 }
 
 interface BrandingContextValue extends BrandingData {
@@ -20,6 +21,7 @@ const defaults: BrandingData = {
   sidebarColor: "#3F0E40",
   logoData: null,
   backgroundData: null,
+  defaultCurrency: "USD",
 };
 
 const BrandingContext = createContext<BrandingContextValue>({

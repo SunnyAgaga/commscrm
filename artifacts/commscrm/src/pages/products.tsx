@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { apiGet, apiPost, apiPut, apiDelete, getBaseUrl } from "@/lib/api";
+import { useBranding } from "@/lib/branding-context";
 import {
   Search, Plus, Package, Plug, Tags, Loader2, Trash2, Edit2,
   RefreshCw, ExternalLink, ArrowUpDown, ChevronLeft, ChevronRight,
@@ -86,6 +87,7 @@ export default function Products() {
 
 function CatalogTab() {
   const qc = useQueryClient();
+  const { defaultCurrency } = useBranding();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
@@ -217,6 +219,7 @@ function CatalogTab() {
       {showAddDialog && (
         <ProductDialog
           categories={categories || []}
+          defaultCurrency={defaultCurrency}
           onClose={() => setShowAddDialog(false)}
           onSaved={() => { setShowAddDialog(false); qc.invalidateQueries({ queryKey: ["products"] }); }}
         />
@@ -225,6 +228,7 @@ function CatalogTab() {
         <ProductDialog
           product={editProduct}
           categories={categories || []}
+          defaultCurrency={defaultCurrency}
           onClose={() => setEditProduct(null)}
           onSaved={() => { setEditProduct(null); qc.invalidateQueries({ queryKey: ["products"] }); }}
         />
@@ -236,11 +240,13 @@ function CatalogTab() {
 function ProductDialog({
   product,
   categories,
+  defaultCurrency,
   onClose,
   onSaved,
 }: {
   product?: ProductType;
   categories: Category[];
+  defaultCurrency?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -249,7 +255,7 @@ function ProductDialog({
     description: product?.description || "",
     sku: product?.sku || "",
     price: product?.price?.toString() || "0",
-    currency: product?.currency || "USD",
+    currency: product?.currency || defaultCurrency || "USD",
     categoryId: product?.categoryId?.toString() || "",
     imageUrl: product?.imageUrl || "",
     stockQty: product?.stockQty?.toString() || "",

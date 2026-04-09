@@ -40,6 +40,7 @@ router.get("/branding", async (_req, res) => {
       logoData: branding.logoData,
       hasBackground: !!branding.backgroundData,
       backgroundData: branding.backgroundData,
+      defaultCurrency: branding.defaultCurrency,
     });
   } catch (err) {
     console.error("Branding GET error:", err);
@@ -49,7 +50,7 @@ router.get("/branding", async (_req, res) => {
 
 router.put("/branding", requireAuth, requireAdmin, async (req: AuthRequest, res) => {
   try {
-    const { appName, primaryColor, sidebarColor, logoData, backgroundData, clearLogo, clearBackground } = req.body;
+    const { appName, primaryColor, sidebarColor, logoData, backgroundData, clearLogo, clearBackground, defaultCurrency } = req.body;
     const branding = await getOrCreateBranding();
 
     const updates: Partial<{
@@ -58,11 +59,13 @@ router.put("/branding", requireAuth, requireAdmin, async (req: AuthRequest, res)
       sidebarColor: string;
       logoData: string | null;
       backgroundData: string | null;
+      defaultCurrency: string;
     }> = {};
 
     if (appName !== undefined) updates.appName = String(appName).slice(0, 100);
     if (primaryColor !== undefined && /^#[0-9a-fA-F]{6}$/.test(primaryColor)) updates.primaryColor = primaryColor;
     if (sidebarColor !== undefined && /^#[0-9a-fA-F]{6}$/.test(sidebarColor)) updates.sidebarColor = sidebarColor;
+    if (defaultCurrency !== undefined) updates.defaultCurrency = String(defaultCurrency).slice(0, 3).toUpperCase();
     if (logoData !== undefined) updates.logoData = logoData || null;
     if (backgroundData !== undefined) updates.backgroundData = backgroundData || null;
     if (clearLogo) updates.logoData = null;

@@ -8,12 +8,13 @@ export interface BrandingSettingsAttributes {
   sidebarColor: string;
   logoData: string | null;
   backgroundData: string | null;
+  defaultCurrency: string;
   updatedAt?: Date;
   createdAt?: Date;
 }
 
 export interface BrandingSettingsCreationAttributes
-  extends Optional<BrandingSettingsAttributes, "id" | "logoData" | "backgroundData"> {}
+  extends Optional<BrandingSettingsAttributes, "id" | "logoData" | "backgroundData" | "defaultCurrency"> {}
 
 export class BrandingSettings
   extends Model<BrandingSettingsAttributes, BrandingSettingsCreationAttributes>
@@ -24,6 +25,7 @@ export class BrandingSettings
   declare sidebarColor: string;
   declare logoData: string | null;
   declare backgroundData: string | null;
+  declare defaultCurrency: string;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -36,6 +38,7 @@ BrandingSettings.init(
     sidebarColor: { type: DataTypes.STRING(20), allowNull: false, defaultValue: "#3F0E40", field: "sidebar_color" },
     logoData: { type: DataTypes.TEXT("long"), allowNull: true, field: "logo_data" },
     backgroundData: { type: DataTypes.TEXT("long"), allowNull: true, field: "background_data" },
+    defaultCurrency: { type: DataTypes.STRING(3), allowNull: false, defaultValue: "USD", field: "default_currency" },
   },
   {
     sequelize,

@@ -45,6 +45,7 @@ interface BrandingData {
   sidebarColor: string;
   logoData: string | null;
   backgroundData: string | null;
+  defaultCurrency: string;
 }
 
 interface ApiAgent { id: number; name: string; email: string; role: string; isActive: boolean; allowedMenus: string[] | null; siteIds: number[] | null; }
@@ -475,6 +476,7 @@ export default function Settings() {
   const [brandingSidebar, setBrandingSidebar] = useState("#3F0E40");
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [bgPreview, setBgPreview] = useState<string | null>(null);
+  const [brandingCurrency, setBrandingCurrency] = useState("USD");
   const [brandingSaving, setBrandingSaving] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [bgUploading, setBgUploading] = useState(false);
@@ -488,6 +490,7 @@ export default function Settings() {
       setBrandingSidebar(d.sidebarColor ?? "#3F0E40");
       setLogoPreview(d.logoData ?? null);
       setBgPreview(d.backgroundData ?? null);
+      setBrandingCurrency(d.defaultCurrency ?? "USD");
     },
   } as Parameters<typeof useQuery>[0]);
 
@@ -499,10 +502,10 @@ export default function Settings() {
       const res = await fetch(`${baseUrl}/branding`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ appName: brandingName, primaryColor: brandingPrimary, sidebarColor: brandingSidebar }),
+        body: JSON.stringify({ appName: brandingName, primaryColor: brandingPrimary, sidebarColor: brandingSidebar, defaultCurrency: brandingCurrency }),
       });
       if (!res.ok) throw new Error("Failed to save");
-      const updated = { appName: brandingName, primaryColor: brandingPrimary, sidebarColor: brandingSidebar, logoData: logoPreview, backgroundData: bgPreview };
+      const updated = { appName: brandingName, primaryColor: brandingPrimary, sidebarColor: brandingSidebar, logoData: logoPreview, backgroundData: bgPreview, defaultCurrency: brandingCurrency };
       applyBrandingToDOM(updated);
       setBrandingData(updated);
       toast({ title: "Appearance saved!", description: "Your branding changes are now live." });
@@ -539,6 +542,7 @@ export default function Settings() {
         appName: brandingName, primaryColor: brandingPrimary, sidebarColor: brandingSidebar,
         logoData: type === "logo" ? (data.logoData ?? null) : logoPreview,
         backgroundData: type === "background" ? (data.backgroundData ?? null) : bgPreview,
+        defaultCurrency: brandingCurrency,
       };
       applyBrandingToDOM(after);
       setBrandingData(after);
@@ -565,6 +569,7 @@ export default function Settings() {
         appName: brandingName, primaryColor: brandingPrimary, sidebarColor: brandingSidebar,
         logoData: type === "logo" ? null : logoPreview,
         backgroundData: type === "background" ? null : bgPreview,
+        defaultCurrency: brandingCurrency,
       };
       applyBrandingToDOM(after);
       setBrandingData(after);
@@ -1943,6 +1948,43 @@ export default function Settings() {
                     <p className="text-xs text-muted-foreground">Displayed in the sidebar header and browser title.</p>
                   </div>
                   <Separator />
+                  <div className="space-y-2">
+                    <Label>Default Currency</Label>
+                    <Select value={brandingCurrency} onValueChange={setBrandingCurrency}>
+                      <SelectTrigger className="max-w-xs">
+                        <SelectValue placeholder="Select currency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[
+                          { code: "USD", name: "US Dollar ($)" },
+                          { code: "EUR", name: "Euro (€)" },
+                          { code: "GBP", name: "British Pound (£)" },
+                          { code: "NGN", name: "Nigerian Naira (₦)" },
+                          { code: "GHS", name: "Ghanaian Cedi (₵)" },
+                          { code: "KES", name: "Kenyan Shilling (KSh)" },
+                          { code: "ZAR", name: "South African Rand (R)" },
+                          { code: "AED", name: "UAE Dirham (د.إ)" },
+                          { code: "INR", name: "Indian Rupee (₹)" },
+                          { code: "CAD", name: "Canadian Dollar (C$)" },
+                          { code: "AUD", name: "Australian Dollar (A$)" },
+                          { code: "JPY", name: "Japanese Yen (¥)" },
+                          { code: "CNY", name: "Chinese Yuan (¥)" },
+                          { code: "BRL", name: "Brazilian Real (R$)" },
+                          { code: "MXN", name: "Mexican Peso (MX$)" },
+                          { code: "SAR", name: "Saudi Riyal (﷼)" },
+                          { code: "EGP", name: "Egyptian Pound (E£)" },
+                          { code: "TZS", name: "Tanzanian Shilling (TSh)" },
+                          { code: "UGX", name: "Ugandan Shilling (USh)" },
+                          { code: "XOF", name: "West African CFA (CFA)" },
+                          { code: "XAF", name: "Central African CFA (FCFA)" },
+                        ].map((c) => (
+                          <SelectItem key={c.code} value={c.code}>{c.code} — {c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">Used as the default currency across products, payments, and invoices.</p>
+                  </div>
+                  <Separator />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label>Primary Color</Label>
@@ -2021,7 +2063,7 @@ export default function Settings() {
                     {brandingSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Palette className="h-4 w-4" />}
                     Save Appearance
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => { setBrandingName("CommsCRM"); setBrandingPrimary("#4F46E5"); setBrandingSidebar("#3F0E40"); }} className="text-muted-foreground">
+                  <Button variant="outline" size="sm" onClick={() => { setBrandingName("CommsCRM"); setBrandingPrimary("#4F46E5"); setBrandingSidebar("#3F0E40"); setBrandingCurrency("USD"); }} className="text-muted-foreground">
                     Reset to Defaults
                   </Button>
                 </CardFooter>

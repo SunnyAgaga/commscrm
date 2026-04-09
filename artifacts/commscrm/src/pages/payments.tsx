@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useBranding } from "@/lib/branding-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -116,7 +116,9 @@ function fmtCurrency(amount: number, currency = "USD") {
   }
 }
 
-function fmtUSD(amount: number) { return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
+let _globalCurrency = "USD";
+function setGlobalCurrency(c: string) { _globalCurrency = c; }
+function fmtDefault(amount: number) { return fmtCurrency(amount, _globalCurrency); }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 function KpiCard({ title, value, sub, icon: Icon, trend, trendPositive, color }: {
@@ -189,8 +191,8 @@ function DashboardTab({ days, setDays }: { days: number; setDays: (d: number) =>
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
-          title="Total Revenue (USD)"
-          value={s ? fmtUSD(s.totalRevenue) : "—"}
+          title="Total Revenue"
+          value={s ? fmtDefault(s.totalRevenue) : "—"}
           sub={`Last ${days} days`}
           icon={DollarSign}
           color="bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"
@@ -208,7 +210,7 @@ function DashboardTab({ days, setDays }: { days: number; setDays: (d: number) =>
         />
         <KpiCard
           title="Avg Order Value"
-          value={s ? fmtUSD(s.avgOrderValue) : "—"}
+          value={s ? fmtDefault(s.avgOrderValue) : "—"}
           sub="Per successful transaction"
           icon={TrendingUp}
           color="bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400"
@@ -253,7 +255,7 @@ function DashboardTab({ days, setDays }: { days: number; setDays: (d: number) =>
                 tickFormatter={(v) => format(parseISO(v), "MMM d")} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} width={55} />
               <Tooltip
-                formatter={(v: number) => [fmtUSD(v), "Revenue"]}
+                formatter={(v: number) => [fmtDefault(v), "Revenue"]}
                 labelFormatter={(l) => format(parseISO(l as string), "MMM d, yyyy")}
               />
               <Area type="monotone" dataKey="revenue" stroke="#7c3aed" strokeWidth={2}
@@ -288,7 +290,7 @@ function DashboardTab({ days, setDays }: { days: number; setDays: (d: number) =>
                         <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(v: number) => fmtUSD(v)} />
+                    <Tooltip formatter={(v: number) => fmtDefault(v)} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="space-y-2 mt-2">
@@ -300,7 +302,7 @@ function DashboardTab({ days, setDays }: { days: number; setDays: (d: number) =>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-muted-foreground text-xs">{p.total} tx</span>
-                        <span className="font-semibold">{fmtUSD(p.revenue)}</span>
+                        <span className="font-semibold">{fmtDefault(p.revenue)}</span>
                       </div>
                     </div>
                   ))}
@@ -592,7 +594,7 @@ function AnalyticsTab() {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="date" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} width={55} />
-              <Tooltip formatter={(v: number) => [fmtUSD(v), "Revenue"]} />
+              <Tooltip formatter={(v: number) => [fmtDefault(v), "Revenue"]} />
               <Bar dataKey="revenue" fill="#7c3aed" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -641,7 +643,7 @@ function AnalyticsTab() {
                       </span>
                       <div className="flex items-center gap-3">
                         <span className="text-muted-foreground text-xs">{p.total} tx</span>
-                        <span className="font-semibold">{fmtUSD(p.revenue)}</span>
+                        <span className="font-semibold">{fmtDefault(p.revenue)}</span>
                       </div>
                     </div>
                     <div className="h-1.5 bg-muted rounded-full overflow-hidden">
@@ -662,9 +664,9 @@ function AnalyticsTab() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: "Total Transactions", value: String(stats?.summary.totalTx ?? 0), icon: ShoppingCart },
-          { label: "Total Revenue",      value: stats ? fmtUSD(stats.summary.totalRevenue) : "—", icon: DollarSign },
+          { label: "Total Revenue",      value: stats ? fmtDefault(stats.summary.totalRevenue) : "—", icon: DollarSign },
           { label: "Success Rate",       value: stats ? `${stats.summary.successRate}%` : "—", icon: Percent },
-          { label: "Avg Order Value",    value: stats ? fmtUSD(stats.summary.avgOrderValue) : "—", icon: TrendingUp },
+          { label: "Avg Order Value",    value: stats ? fmtDefault(stats.summary.avgOrderValue) : "—", icon: TrendingUp },
         ].map(({ label, value, icon: Icon }) => (
           <Card key={label}>
             <CardContent className="p-4 flex items-center gap-3">
@@ -689,9 +691,13 @@ function PaymentLinksTab() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({
     provider: "stripe", title: "", description: "", amount: "",
-    currency: defaultCurrency || "USD", customerName: "", customerEmail: "", expiresInDays: "7",
+    currency: "USD", customerName: "", customerEmail: "", expiresInDays: "7",
   });
   const [copiedId, setCopiedId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (defaultCurrency) setForm((f) => ({ ...f, currency: defaultCurrency }));
+  }, [defaultCurrency]);
 
   const { data: links = [], isLoading } = useQuery<PaymentLink[]>({
     queryKey: ["payment-links"],
@@ -884,7 +890,7 @@ function PaymentLinksTab() {
                 <Select value={form.currency} onValueChange={(v) => setForm({ ...form, currency: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {["USD","EUR","GBP","NGN","GHS","KES","ZAR"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {["USD","EUR","GBP","NGN","GHS","KES","ZAR","AED","INR","CAD","AUD","JPY","CNY","BRL","MXN","SAR","EGP","TZS","UGX","XOF","XAF"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -947,8 +953,13 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
 ];
 
 export default function PaymentsPage() {
+  const { defaultCurrency } = useBranding();
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [dashDays, setDashDays] = useState(30);
+
+  useEffect(() => {
+    if (defaultCurrency) setGlobalCurrency(defaultCurrency);
+  }, [defaultCurrency]);
 
   return (
     <div className="h-full overflow-y-auto">

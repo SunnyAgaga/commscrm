@@ -26,6 +26,16 @@ async function findOrCreateConversation(customerId: number, channel: SupportedCh
     where: { customerId, status: ["open", "pending"] as unknown as string },
   });
   if (!conversation) {
+    conversation = await Conversation.findOne({
+      where: { customerId },
+      order: [["lastMessageAt", "DESC"], ["id", "DESC"]],
+    });
+    if (conversation) {
+      conversation.status = "open";
+      await conversation.save();
+    }
+  }
+  if (!conversation) {
     conversation = await Conversation.create({
       customerId,
       channel,
@@ -358,7 +368,8 @@ router.get("/widget/history", async (req, res) => {
     }
 
     const conversation = await Conversation.findOne({
-      where: { customerId: customer.id, status: ["open", "pending"] as unknown as string },
+      where: { customerId: customer.id },
+      order: [["lastMessageAt", "DESC"], ["id", "DESC"]],
     });
     if (!conversation) {
       res.json({ messages: [] });
@@ -369,11 +380,12 @@ router.get("/widget/history", async (req, res) => {
       where: { conversationId: conversation.id },
       order: [["createdAt", "ASC"]],
       limit: 50,
-      attributes: ["sender", "content", "createdAt"],
+      attributes: ["id", "sender", "content", "createdAt"],
     });
 
     res.json({
       messages: messages.map((m) => ({
+        id: m.id,
         sender: m.sender === "customer" ? "user" : "bot",
         content: m.content,
         time: m.createdAt,
@@ -627,6 +639,8 @@ async function loadHistory(){
       conversationStarted=true;
       for(var i=0;i<data.messages.length;i++){
         var m=data.messages[i];
+        if(m.id)shownMsgIds[m.id]=true;
+        if(m.id&&m.id>lastMsgId)lastMsgId=m.id;
         addMsg(m.content,m.sender==="user"?"usr":"bot",true);
       }
     }else{
@@ -635,17 +649,6 @@ async function loadHistory(){
   }catch(e){
     console.error("CommsCRM: history load failed",e);
     if(!msgsEl.children.length)addMsg(greeting,"bot",true);
-  }
-  if(conversationStarted){
-    try{
-      var idData=await apiCall("GET","/widget/messages?widgetId="+encodeURIComponent(wId)+"&visitorId="+encodeURIComponent(visitorId));
-      if(idData.messages&&idData.messages.length>0){
-        for(var j=0;j<idData.messages.length;j++){
-          if(idData.messages[j].id)shownMsgIds[idData.messages[j].id]=true;
-        }
-        lastMsgId=idData.messages[idData.messages.length-1].id||0;
-      }
-    }catch(e){}
   }
 }
 
@@ -716,6 +719,15 @@ function stopPolling(){
 
 sendBtn.onclick=send;
 txtEl.onkeydown=function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}};
+
+document.addEventListener("visibilitychange",function(){
+  if(document.hidden){
+    stopPolling();
+  }else if(conversationStarted){
+    pollMessages();
+    startPolling();
+  }
+});
 
 loadHistory().then(function(){if(conversationStarted)startPolling();});
 })();`;

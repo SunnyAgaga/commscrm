@@ -486,13 +486,18 @@ var apiBase=cfg.apiBase||${JSON.stringify(baseUrl)};
 var apiPaths=["/api","/crm-api"];
 
 var visitorId=(function(){
-  try{
-    var v=localStorage.getItem("_ccrm_vid");
-    if(v)return v;
+  var key="_ccrm_vid_"+wId;
+  function getCookie(n){var m=document.cookie.match(new RegExp("(?:^|;\\\\s*)"+n+"=([^;]*)"));return m?decodeURIComponent(m[1]):null;}
+  function setCookie(n,v){try{document.cookie=n+"="+encodeURIComponent(v)+";path=/;max-age=31536000;SameSite=Lax";}catch(e){}}
+  var v=null;
+  try{v=localStorage.getItem(key);}catch(e){}
+  if(!v)v=getCookie(key);
+  if(!v){
     v="v"+Math.random().toString(36).slice(2)+Date.now().toString(36);
-    localStorage.setItem("_ccrm_vid",v);
-    return v;
-  }catch(e){return "v"+Math.random().toString(36).slice(2)+Date.now().toString(36);}
+  }
+  try{localStorage.setItem(key,v);}catch(e){}
+  setCookie(key,v);
+  return v;
 })();
 
 var side=position==="bottom-left"?"left:24px":"right:24px";
